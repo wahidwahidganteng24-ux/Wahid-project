@@ -3,221 +3,532 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Neon Sandbox</title>
+<title>Wahid Project</title>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; overflow:hidden; background:#05060a; touch-action:none; }
-  canvas { display:block; width:100%; height:100%; }
-  #hud {
-    position:fixed; left:14px; bottom:14px; z-index:10;
-    font-family:'JetBrains Mono',ui-monospace,monospace;
-    font-size:11px; letter-spacing:.12em; color:#6a7690;
-    text-transform:uppercase; pointer-events:none;
-    text-shadow:0 0 8px rgba(0,0,0,.9);
+  :root {
+    --bg:#0a0c10; --panel:#11151c; --line:#1e2633; --txt:#e6edf3;
+    --dim:#6a7690; --acc:#4ade80; --acc2:#22d3ee; --warn:#fbbf24; --bad:#f87171;
   }
-  #hud b { color:#8fe6ff; font-weight:500; }
-  #title {
-    position:fixed; left:14px; top:14px; z-index:10;
-    font-family:'JetBrains Mono',ui-monospace,monospace;
-    font-size:13px; letter-spacing:.3em; color:#8fe6ff;
-    text-shadow:0 0 12px rgba(143,230,255,.5);
-    pointer-events:none; text-transform:uppercase;
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; background:var(--bg); color:var(--txt);
+    font-family:ui-monospace,'JetBrains Mono',monospace; overflow:hidden; }
+  #app { height:100%; display:flex; flex-direction:column; }
+
+  header {
+    padding:14px 16px; display:flex; align-items:center; gap:10px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#0d1016,#0a0c10);
   }
+  header .dot { width:8px; height:8px; border-radius:50%; background:var(--acc);
+    box-shadow:0 0 10px var(--acc); animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  header h1 { font-size:13px; letter-spacing:.3em; font-weight:600; text-transform:uppercase; }
+  header .ver { margin-left:auto; font-size:10px; color:var(--dim); letter-spacing:.15em; }
+
+  nav {
+    display:grid; grid-template-columns:repeat(4,1fr); gap:6px;
+    padding:10px; border-bottom:1px solid var(--line); background:#0a0c10;
+  }
+  nav button {
+    padding:10px 4px; font-size:10px; letter-spacing:.08em;
+    background:var(--panel); color:var(--dim);
+    border:1px solid var(--line); border-radius:8px;
+    cursor:pointer; font-family:inherit; text-transform:uppercase;
+    transition:all .15s; font-weight:500;
+  }
+  nav button.active {
+    background:linear-gradient(135deg,#132a1e,#0f2530);
+    color:var(--acc); border-color:#22d3ee44;
+    box-shadow:0 0 12px -4px var(--acc2);
+  }
+
+  main { flex:1; overflow-y:auto; padding:16px; }
+  .view { display:none; }
+  .view.active { display:block; animation:fade .25s ease; }
+  @keyframes fade { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+
+  .card {
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:14px; margin-bottom:12px;
+  }
+  .card h2 { font-size:11px; letter-spacing:.15em; color:var(--dim); margin-bottom:10px;
+    text-transform:uppercase; font-weight:600; }
+
+  input, textarea, select {
+    width:100%; padding:10px 12px; background:#0a0c10; color:var(--txt);
+    border:1px solid var(--line); border-radius:8px;
+    font-family:inherit; font-size:13px; outline:none; margin-bottom:8px;
+  }
+  input:focus, textarea:focus { border-color:var(--acc2); }
+  textarea { resize:vertical; min-height:70px; }
+
+  .btn {
+    padding:10px 16px; background:var(--acc); color:#052e16; border:none;
+    border-radius:8px; font-family:inherit; font-weight:700; font-size:12px;
+    letter-spacing:.08em; cursor:pointer; text-transform:uppercase;
+  }
+  .btn:active { transform:scale(.97); }
+  .btn.ghost { background:transparent; color:var(--acc2); border:1px solid var(--acc2); }
+  .btn.bad { background:var(--bad); color:#450a0a; }
+
+  .row { display:flex; gap:8px; align-items:center; }
+  .row > * { flex:1; }
+  .out {
+    margin-top:10px; padding:12px; background:#05070a;
+    border:1px solid var(--line); border-radius:8px;
+    font-size:12px; line-height:1.6; color:var(--dim);
+    word-break:break-all; min-height:44px; white-space:pre-wrap;
+  }
+  .out strong { color:var(--acc); }
+  .tag { display:inline-block; padding:2px 8px; background:#132a1e; color:var(--acc);
+    border-radius:20px; font-size:10px; letter-spacing:.08em; }
+
+  /* view-specific */
+  #calcDisplay {
+    text-align:right; font-size:28px; padding:14px; color:var(--txt);
+    background:#05070a; border-radius:8px; margin-bottom:10px;
+    min-height:56px; overflow:hidden; letter-spacing:.02em;
+  }
+  .calc-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .calc-grid button {
+    padding:16px 0; background:var(--panel); color:var(--txt);
+    border:1px solid var(--line); border-radius:8px;
+    font-size:16px; font-family:inherit; cursor:pointer; font-weight:600;
+  }
+  .calc-grid button:active { background:#1e2633; }
+  .calc-grid .op { color:var(--acc2); }
+  .calc-grid .eq { background:var(--acc); color:#052e16; }
+  .calc-grid .clr { color:var(--warn); }
+
+  #todoList { list-style:none; }
+  #todoList li {
+    display:flex; align-items:center; gap:10px; padding:10px 12px;
+    background:#05070a; border:1px solid var(--line); border-radius:8px;
+    margin-bottom:6px; font-size:13px;
+  }
+  #todoList li.done span { text-decoration:line-through; color:var(--dim); }
+  #todoList li input[type=checkbox] { width:18px; height:18px; accent-color:var(--acc); flex:0 0 auto; margin:0; }
+  #todoList li span { flex:1; word-break:break-word; }
+  #todoList li button {
+    background:transparent; border:none; color:var(--bad); font-size:16px;
+    cursor:pointer; padding:4px 8px; font-family:inherit;
+  }
+
+  #pwdOut {
+    font-size:18px; padding:14px; letter-spacing:.15em; word-break:break-all;
+    background:#05070a; border:1px solid var(--line); border-radius:8px;
+    min-height:56px; color:var(--acc); font-weight:600;
+  }
+  .range-row { display:flex; justify-content:space-between; font-size:11px; color:var(--dim); margin:-4px 0 8px; }
+  input[type=range] { accent-color:var(--acc2); padding:0; margin-bottom:14px; }
+
+  #bmiOut { text-align:center; padding:16px; }
+  #bmiVal { font-size:36px; font-weight:700; color:var(--acc); }
+  #bmiCat { font-size:13px; color:var(--dim); letter-spacing:.1em; margin-top:4px; }
+
+  .timer-big {
+    text-align:center; font-size:44px; font-weight:700; color:var(--acc2);
+    padding:20px; background:#05070a; border-radius:10px;
+    letter-spacing:.05em; margin-bottom:10px;
+  }
+  .timer-big.running { color:var(--acc); }
+  .timer-big.done { color:var(--warn); animation:blink .5s infinite; }
+  @keyframes blink { 50%{opacity:.3} }
+  .preset-row { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:10px; }
+  .preset-row button {
+    padding:8px; background:var(--panel); color:var(--dim);
+    border:1px solid var(--line); border-radius:6px;
+    font-family:inherit; font-size:11px; cursor:pointer;
+  }
+
+  #flipCard {
+    perspective:1000px; height:180px; margin-bottom:12px;
+  }
+  #flipInner {
+    position:relative; width:100%; height:100%;
+    transition:transform .6s cubic-bezier(.4,.2,.2,1);
+    transform-style:preserve-3d; cursor:pointer;
+  }
+  #flipCard.flipped #flipInner { transform:rotateY(180deg); }
+  .flip-face {
+    position:absolute; inset:0; backface-visibility:hidden;
+    border-radius:14px; display:flex; align-items:center; justify-content:center;
+    text-align:center; padding:20px; font-size:16px; line-height:1.5;
+  }
+  .flip-front {
+    background:linear-gradient(135deg,#0f2530,#132a1e);
+    color:var(--acc); border:1px solid var(--acc2);
+    font-weight:600; letter-spacing:.05em;
+  }
+  .flip-back {
+    background:linear-gradient(135deg,#1e2633,#11151c);
+    color:var(--txt); border:1px solid var(--line);
+    transform:rotateY(180deg);
+  }
+
+  footer {
+    padding:10px 16px; border-top:1px solid var(--line);
+    font-size:10px; color:var(--dim); letter-spacing:.1em;
+    display:flex; justify-content:space-between;
+    background:#0a0c10;
+  }
+  footer .live { color:var(--acc); }
 </style>
 </head>
 <body>
-<div id="title">neon sandbox</div>
-<div id="hud">drag = tarik · tap = ledak · <b id="cnt">0</b> partikel</div>
-<canvas id="c"></canvas>
+<div id="app">
+  <header>
+    <div class="dot"></div>
+    <h1>Wahid Project</h1>
+    <div class="ver">v1.0</div>
+  </header>
+
+  <nav>
+    <button data-view="calc" class="active">Kalku</button>
+    <button data-view="todo">Tugas</button>
+    <button data-view="pwd">Sandi</button>
+    <button data-view="bmi">BMI</button>
+    <button data-view="timer">Timer</button>
+    <button data-view="flip">Kartu</button>
+    <button data-view="notes">Catat</button>
+    <button data-view="about">Info</button>
+  </nav>
+
+  <main>
+    <!-- KALKULATOR -->
+    <section id="v-calc" class="view active">
+      <div class="card">
+        <h2>Kalkulator</h2>
+        <div id="calcDisplay">0</div>
+        <div class="calc-grid">
+          <button class="clr" data-k="C">C</button>
+          <button data-k="⌫">⌫</button>
+          <button class="op" data-k="%">%</button>
+          <button class="op" data-k="/">÷</button>
+          <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+          <button class="op" data-k="*">×</button>
+          <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+          <button class="op" data-k="-">−</button>
+          <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+          <button class="op" data-k="+">+</button>
+          <button data-k="0">0</button><button data-k=".">.</button>
+          <button class="op" data-k="(">(</button>
+          <button class="op" data-k=")">)</button>
+          <button class="eq" data-k="=" style="grid-column:span 4">=</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TODO -->
+    <section id="v-todo" class="view">
+      <div class="card">
+        <h2>Daftar Tugas</h2>
+        <div class="row">
+          <input id="todoInput" placeholder="Tugas baru..." maxlength="80">
+          <button class="btn" id="todoAdd" style="flex:0 0 auto">+</button>
+        </div>
+        <ul id="todoList"></ul>
+        <div class="out" id="todoStat">0 tugas · 0 selesai</div>
+      </div>
+    </section>
+
+    <!-- PASSWORD -->
+    <section id="v-pwd" class="view">
+      <div class="card">
+        <h2>Generator Sandi</h2>
+        <div id="pwdOut">—</div>
+        <div class="range-row"><span>Panjang</span><span id="pwdLenLabel">16</span></div>
+        <input type="range" id="pwdLen" min="8" max="40" value="16">
+        <div class="row" style="margin-bottom:8px">
+          <label class="tag"><input type="checkbox" id="pwdUpper" checked style="width:auto;margin-right:6px">A-Z</label>
+          <label class="tag"><input type="checkbox" id="pwdLower" checked style="width:auto;margin-right:6px">a-z</label>
+        </div>
+        <div class="row">
+          <label class="tag"><input type="checkbox" id="pwdNum" checked style="width:auto;margin-right:6px">0-9</label>
+          <label class="tag"><input type="checkbox" id="pwdSym" checked style="width:auto;margin-right:6px">!@#</label>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="pwdGen">Buat</button>
+          <button class="btn ghost" id="pwdCopy">Salin</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- BMI -->
+    <section id="v-bmi" class="view">
+      <div class="card">
+        <h2>Kalkulator BMI</h2>
+        <input type="number" id="bmiWeight" placeholder="Berat (kg)" inputmode="decimal">
+        <input type="number" id="bmiHeight" placeholder="Tinggi (cm)" inputmode="decimal">
+        <button class="btn" id="bmiCalc" style="width:100%">Hitung</button>
+        <div id="bmiOut">
+          <div id="bmiVal">—</div>
+          <div id="bmiCat">masukkan data</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TIMER -->
+    <section id="v-timer" class="view">
+      <div class="card">
+        <h2>Timer Fokus</h2>
+        <div class="timer-big" id="timerDisplay">25:00</div>
+        <div class="preset-row">
+          <button data-min="1">1m</button>
+          <button data-min="5">5m</button>
+          <button data-min="25">25m</button>
+          <button data-min="50">50m</button>
+        </div>
+        <div class="row">
+          <button class="btn" id="timerStart">Mulai</button>
+          <button class="btn bad" id="timerReset">Reset</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- FLIP -->
+    <section id="v-flip" class="view">
+      <div class="card">
+        <h2>Kartu Balik</h2>
+        <div id="flipCard">
+          <div id="flipInner">
+            <div class="flip-face flip-front">Tap untuk balik →</div>
+            <div class="flip-face flip-back">Kartu ini jalan full offline. Balik lagi untuk kembali.</div>
+          </div>
+        </div>
+        <button class="btn ghost" id="flipEdit" style="width:100%">Edit isi kartu</button>
+      </div>
+    </section>
+
+    <!-- NOTES -->
+    <section id="v-notes" class="view">
+      <div class="card">
+        <h2>Catatan Cepat</h2>
+        <textarea id="notesArea" placeholder="Tulis catatan di sini, tersimpan otomatis..." style="min-height:180px"></textarea>
+        <div class="out" id="notesStat">tersimpan otomatis</div>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section id="v-about" class="view">
+      <div class="card">
+        <h2>Tentang</h2>
+        <div style="font-size:13px;line-height:1.8;color:var(--dim)">
+          <p><strong style="color:var(--acc)">Wahid Project v1.0</strong></p>
+          <p>Paket 7 mini-app dalam satu file HTML. Tanpa library, tanpa internet, tanpa instalasi.</p>
+          <p style="margin-top:8px"><span class="tag">Kalkulator</span> <span class="tag">Todo</span> <span class="tag">Sandi</span> <span class="tag">BMI</span> <span class="tag">Timer</span> <span class="tag">Kartu</span> <span class="tag">Catatan</span></p>
+          <p style="margin-top:10px">Semua data tersimpan di localStorage browser. Buka di Acode → preview browser HP → jalan.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Wahid Project</span>
+    <span class="live">● offline ready</span>
+  </footer>
+</div>
+
 <script>
 (() => {
-  const cvs = document.getElementById('c');
-  const ctx = cvs.getContext('2d', { alpha:false });
-  const cnt = document.getElementById('cnt');
+  const $ = s => document.querySelector(s);
+  const $$ = s => document.querySelectorAll(s);
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('wahid_' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem('wahid_' + k, JSON.stringify(v)); } catch {} }
+  };
 
-  let W = 0, H = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
-  function resize() {
-    W = cvs.clientWidth; H = cvs.clientHeight;
-    cvs.width = Math.floor(W * dpr);
-    cvs.height = Math.floor(H * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-  window.addEventListener('resize', resize);
-  resize();
-
-  // ---- particle pool ----
-  const MAX = 2600;
-  const px = new Float32Array(MAX);
-  const py = new Float32Array(MAX);
-  const vx = new Float32Array(MAX);
-  const vy = new Float32Array(MAX);
-  const life = new Float32Array(MAX);
-  const maxLife = new Float32Array(MAX);
-  const hue = new Float32Array(MAX);
-  const size = new Float32Array(MAX);
-  let head = 0;
-  let alive = 0;
-
-  function spawn(x, y, dvx, dvy, h, s, l) {
-    const i = head;
-    head = (head + 1) % MAX;
-    px[i] = x; py[i] = y;
-    vx[i] = dvx; vy[i] = dvy;
-    hue[i] = h;
-    size[i] = s;
-    life[i] = l;
-    maxLife[i] = l;
-    alive = Math.min(alive + 1, MAX);
-  }
-
-  // ---- pointer ----
-  let mx = -9999, my = -9999, pmx = -9999, pmy = -9999;
-  let down = false, downT = 0, downX = 0, downY = 0;
-  let dragVX = 0, dragVY = 0;
-
-  function setP(x, y) {
-    pmx = mx; pmy = my;
-    mx = x; my = y;
-    if (pmx > -9998) {
-      dragVX = mx - pmx;
-      dragVY = my - pmy;
-    }
-  }
-
-  cvs.addEventListener('pointerdown', e => {
-    down = true; downT = performance.now();
-    downX = e.clientX; downY = e.clientY;
-    cvs.setPointerCapture(e.pointerId);
-    setP(e.clientX, e.clientY);
-    pmx = mx; pmy = my;
-    dragVX = dragVY = 0;
+  // ===== NAV =====
+  $$('nav button').forEach(b => {
+    b.addEventListener('click', () => {
+      $$('nav button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      $$('.view').forEach(v => v.classList.remove('active'));
+      $('#v-' + b.dataset.view).classList.add('active');
+    });
   });
-  cvs.addEventListener('pointermove', e => {
-    setP(e.clientX, e.clientY);
-    if (down) {
-      const n = 6;
-      for (let k = 0; k < n; k++) {
-        const t = k / n;
-        spawn(
-          mx + (Math.random() - 0.5) * 10,
-          my + (Math.random() - 0.5) * 10,
-          dragVX * (0.3 + Math.random() * 0.5),
-          dragVY * (0.3 + Math.random() * 0.5),
-          185 + Math.random() * 55,
-          1.2 + Math.random() * 1.8,
-          700 + Math.random() * 900
-        );
+
+  // ===== CALCULATOR =====
+  const calcDisp = $('#calcDisplay');
+  let calcExpr = '';
+  const calcKeys = $$('.calc-grid button');
+  calcKeys.forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.k;
+    if (k === 'C') { calcExpr = ''; calcDisp.textContent = '0'; return; }
+    if (k === '⌫') { calcExpr = calcExpr.slice(0, -1); calcDisp.textContent = calcExpr || '0'; return; }
+    if (k === '=') {
+      try {
+        const safe = calcExpr.replace(/[^0-9+\-*/().%]/g, '');
+        const val = Function('"use strict";return (' + safe + ')')();
+        calcDisp.textContent = (Math.round(val * 1e9) / 1e9).toString();
+        calcExpr = calcDisp.textContent;
+      } catch {
+        calcDisp.textContent = 'error';
+        calcExpr = '';
       }
+      return;
     }
+    calcExpr += k;
+    calcDisp.textContent = calcExpr;
+  }));
+
+  // ===== TODO =====
+  let todos = store.get('todos', []);
+  function renderTodos() {
+    const list = $('#todoList');
+    list.innerHTML = '';
+    todos.forEach((t, i) => {
+      const li = document.createElement('li');
+      if (t.done) li.classList.add('done');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.checked = t.done;
+      cb.addEventListener('change', () => {
+        todos[i].done = cb.checked; store.set('todos', todos); renderTodos();
+      });
+      const sp = document.createElement('span');
+      sp.textContent = t.text;
+      const del = document.createElement('button');
+      del.textContent = '×';
+      del.addEventListener('click', () => {
+        todos.splice(i, 1); store.set('todos', todos); renderTodos();
+      });
+      li.append(cb, sp, del);
+      list.appendChild(li);
+    });
+    const done = todos.filter(t => t.done).length;
+    $('#todoStat').innerHTML = '<strong>' + todos.length + '</strong> tugas · <strong>' + done + '</strong> selesai';
+  }
+  function addTodo() {
+    const inp = $('#todoInput');
+    const txt = inp.value.trim();
+    if (!txt) return;
+    todos.push({ text: txt, done: false });
+    store.set('todos', todos);
+    inp.value = '';
+    renderTodos();
+  }
+  $('#todoAdd').addEventListener('click', addTodo);
+  $('#todoInput').addEventListener('keydown', e => { if (e.key === 'Enter') addTodo(); });
+  renderTodos();
+
+  // ===== PASSWORD =====
+  function genPwd() {
+    const len = +$('#pwdLen').value;
+    let pool = '';
+    if ($('#pwdUpper').checked) pool += 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    if ($('#pwdLower').checked) pool += 'abcdefghijkmnpqrstuvwxyz';
+    if ($('#pwdNum').checked) pool += '23456789';
+    if ($('#pwdSym').checked) pool += '!@#$%^&*-_=+';
+    if (!pool) { $('#pwdOut').textContent = 'pilih minimal satu'; return; }
+    const arr = new Uint32Array(len);
+    crypto.getRandomValues(arr);
+    let out = '';
+    for (let i = 0; i < len; i++) out += pool[arr[i] % pool.length];
+    $('#pwdOut').textContent = out;
+  }
+  $('#pwdGen').addEventListener('click', genPwd);
+  $('#pwdLen').addEventListener('input', e => $('#pwdLenLabel').textContent = e.target.value);
+  $('#pwdCopy').addEventListener('click', () => {
+    const t = $('#pwdOut').textContent;
+    if (!t || t === '—') return;
+    navigator.clipboard.writeText(t).then(() => {
+      $('#pwdOut').style.color = '#22d3ee';
+      setTimeout(() => $('#pwdOut').style.color = '', 400);
+    }).catch(() => {});
   });
-  cvs.addEventListener('pointerup', e => {
-    const dt = performance.now() - downT;
-    const dx = e.clientX - downX, dy = e.clientY - downY;
-    const dist = Math.hypot(dx, dy);
-    if (dt < 260 && dist < 12) {
-      // tap => burst
-      const n = 220;
-      for (let k = 0; k < n; k++) {
-        const a = Math.random() * Math.PI * 2;
-        const sp = 2 + Math.random() * 7;
-        spawn(
-          e.clientX, e.clientY,
-          Math.cos(a) * sp, Math.sin(a) * sp,
-          175 + Math.random() * 90,
-          1 + Math.random() * 2.6,
-          800 + Math.random() * 1100
-        );
-      }
-    }
-    down = false;
+
+  // ===== BMI =====
+  $('#bmiCalc').addEventListener('click', () => {
+    const w = +$('#bmiWeight').value;
+    const h = +$('#bmiHeight').value / 100;
+    if (!w || !h) { $('#bmiVal').textContent = '—'; $('#bmiCat').textContent = 'masukkan data'; return; }
+    const bmi = w / (h * h);
+    $('#bmiVal').textContent = bmi.toFixed(1);
+    let cat = '', color = 'var(--acc)';
+    if (bmi < 18.5) { cat = 'kurus'; color = '#22d3ee'; }
+    else if (bmi < 25) { cat = 'normal'; color = '#4ade80'; }
+    else if (bmi < 30) { cat = 'berlebih'; color = '#fbbf24'; }
+    else { cat = 'obesitas'; color = '#f87171'; }
+    $('#bmiVal').style.color = color;
+    $('#bmiCat').textContent = cat;
   });
-  cvs.addEventListener('pointercancel', () => { down = false; });
 
-  // ---- ambient drift from idle particles ----
-  function ambient(dt) {
-    if (alive < 120) {
-      const n = 1;
-      for (let k = 0; k < n; k++) {
-        spawn(
-          Math.random() * W,
-          Math.random() * H,
-          (Math.random() - 0.5) * 0.3,
-          (Math.random() - 0.5) * 0.3,
-          200 + Math.random() * 60,
-          0.8 + Math.random() * 1.2,
-          4000 + Math.random() * 3000
-        );
+  // ===== TIMER =====
+  let timerTotal = 25 * 60, timerLeft = timerTotal, timerInt = null, timerRunning = false;
+  function fmt(s) {
+    const m = Math.floor(s / 60), r = s % 60;
+    return String(m).padStart(2, '0') + ':' + String(r).padStart(2, '0');
+  }
+  function renderTimer() {
+    const el = $('#timerDisplay');
+    el.textContent = fmt(timerLeft);
+    el.className = 'timer-big' + (timerRunning ? ' running' : '') + (timerLeft === 0 ? ' done' : '');
+  }
+  function startTimer() {
+    if (timerRunning) {
+      clearInterval(timerInt); timerRunning = false;
+      $('#timerStart').textContent = 'Lanjut';
+      renderTimer(); return;
+    }
+    if (timerLeft === 0) timerLeft = timerTotal;
+    timerRunning = true;
+    $('#timerStart').textContent = 'Jeda';
+    timerInt = setInterval(() => {
+      timerLeft--;
+      if (timerLeft <= 0) {
+        timerLeft = 0;
+        clearInterval(timerInt); timerRunning = false;
+        $('#timerStart').textContent = 'Mulai';
+        try { new AudioContext(); } catch {}
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
       }
-    }
+      renderTimer();
+    }, 1000);
+    renderTimer();
   }
-
-  // ---- physics constants ----
-  const DRAG = 0.985;
-  const GRAV = 0.015;
-
-  function step(dt) {
-    const dragPow = Math.pow(DRAG, dt / 16.67);
-    const grav = GRAV * (dt / 16.67);
-    for (let i = 0; i < MAX; i++) {
-      if (life[i] <= 0) continue;
-      vx[i] *= dragPow;
-      vy[i] = vy[i] * dragPow + grav;
-      px[i] += vx[i] * (dt / 16.67);
-      py[i] += vy[i] * (dt / 16.67);
-      life[i] -= dt;
-      if (py[i] > H + 40 || px[i] < -40 || px[i] > W + 40) {
-        life[i] = 0;
-      }
-    }
-  }
-
-  function render() {
-    // trail fade
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = 'rgba(5,6,10,0.22)';
-    ctx.fillRect(0, 0, W, H);
-
-    ctx.globalCompositeOperation = 'lighter';
-    let c = 0;
-    for (let i = 0; i < MAX; i++) {
-      if (life[i] <= 0) continue;
-      const t = life[i] / maxLife[i];
-      const alpha = t * t;
-      const s = size[i] * (0.4 + t * 0.9);
-      ctx.beginPath();
-      ctx.fillStyle = 'hsla(' + hue[i] + ',100%,' + (55 + t * 20) + '%,' + alpha + ')';
-      ctx.arc(px[i], py[i], s, 0, 6.2832);
-      ctx.fill();
-      c++;
-    }
-    ctx.globalCompositeOperation = 'source-over';
-    // glow layer for large particles handled by additive already
-    cnt.textContent = c;
-  }
-
-  let last = performance.now();
-  function loop(now) {
-    let dt = now - last;
-    last = now;
-    if (dt > 48) dt = 48;
-
-    ambient(dt);
-    step(dt);
-    render();
-    requestAnimationFrame(loop);
-  }
-  requestAnimationFrame(loop);
-
-  // ---- double-tap to clear ----
-  let lastTap = 0;
-  cvs.addEventListener('pointerup', e => {
-    const now = performance.now();
-    if (now - lastTap < 280) {
-      for (let i = 0; i < MAX; i++) life[i] = 0;
-    }
-    lastTap = now;
+  $('#timerStart').addEventListener('click', startTimer);
+  $('#timerReset').addEventListener('click', () => {
+    clearInterval(timerInt); timerRunning = false;
+    timerLeft = timerTotal;
+    $('#timerStart').textContent = 'Mulai';
+    renderTimer();
   });
+  $$('.preset-row button').forEach(b => b.addEventListener('click', () => {
+    timerTotal = +b.dataset.min * 60;
+    timerLeft = timerTotal;
+    clearInterval(timerInt); timerRunning = false;
+    $('#timerStart').textContent = 'Mulai';
+    renderTimer();
+  }));
+  renderTimer();
+
+  // ===== FLIP =====
+  const flipCard = $('#flipCard');
+  flipCard.addEventListener('click', () => flipCard.classList.toggle('flipped'));
+  $('#flipEdit').addEventListener('click', () => {
+    const cur = flipCard.querySelector('.flip-back').textContent;
+    const t = prompt('Isi kartu balik:', cur);
+    if (t) { flipCard.querySelector('.flip-back').textContent = t; store.set('flip', t); }
+  });
+  const savedFlip = store.get('flip', '');
+  if (savedFlip) flipCard.querySelector('.flip-back').textContent = savedFlip;
+
+  // ===== NOTES =====
+  const notes = $('#notesArea');
+  notes.value = store.get('notes', '');
+  let notesTimer;
+  notes.addEventListener('input', () => {
+    clearTimeout(notesTimer);
+    $('#notesStat').textContent = 'menyimpan...';
+    notesTimer = setTimeout(() => {
+      store.set('notes', notes.value);
+      $('#notesStat').textContent = 'tersimpan ' + new Date().toLocaleTimeString('id-ID');
+    }, 400);
+  });
+  if (notes.value) $('#notesStat').textContent = 'tersimpan otomatis';
+
 })();
 </script>
 </body>
 </html>
+```
