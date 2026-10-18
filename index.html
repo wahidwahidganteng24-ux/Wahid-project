@@ -1,0 +1,223 @@
+# Wahid-project<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Neon Sandbox</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#05060a; touch-action:none; }
+  canvas { display:block; width:100%; height:100%; }
+  #hud {
+    position:fixed; left:14px; bottom:14px; z-index:10;
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:11px; letter-spacing:.12em; color:#6a7690;
+    text-transform:uppercase; pointer-events:none;
+    text-shadow:0 0 8px rgba(0,0,0,.9);
+  }
+  #hud b { color:#8fe6ff; font-weight:500; }
+  #title {
+    position:fixed; left:14px; top:14px; z-index:10;
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:13px; letter-spacing:.3em; color:#8fe6ff;
+    text-shadow:0 0 12px rgba(143,230,255,.5);
+    pointer-events:none; text-transform:uppercase;
+  }
+</style>
+</head>
+<body>
+<div id="title">neon sandbox</div>
+<div id="hud">drag = tarik · tap = ledak · <b id="cnt">0</b> partikel</div>
+<canvas id="c"></canvas>
+<script>
+(() => {
+  const cvs = document.getElementById('c');
+  const ctx = cvs.getContext('2d', { alpha:false });
+  const cnt = document.getElementById('cnt');
+
+  let W = 0, H = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  function resize() {
+    W = cvs.clientWidth; H = cvs.clientHeight;
+    cvs.width = Math.floor(W * dpr);
+    cvs.height = Math.floor(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---- particle pool ----
+  const MAX = 2600;
+  const px = new Float32Array(MAX);
+  const py = new Float32Array(MAX);
+  const vx = new Float32Array(MAX);
+  const vy = new Float32Array(MAX);
+  const life = new Float32Array(MAX);
+  const maxLife = new Float32Array(MAX);
+  const hue = new Float32Array(MAX);
+  const size = new Float32Array(MAX);
+  let head = 0;
+  let alive = 0;
+
+  function spawn(x, y, dvx, dvy, h, s, l) {
+    const i = head;
+    head = (head + 1) % MAX;
+    px[i] = x; py[i] = y;
+    vx[i] = dvx; vy[i] = dvy;
+    hue[i] = h;
+    size[i] = s;
+    life[i] = l;
+    maxLife[i] = l;
+    alive = Math.min(alive + 1, MAX);
+  }
+
+  // ---- pointer ----
+  let mx = -9999, my = -9999, pmx = -9999, pmy = -9999;
+  let down = false, downT = 0, downX = 0, downY = 0;
+  let dragVX = 0, dragVY = 0;
+
+  function setP(x, y) {
+    pmx = mx; pmy = my;
+    mx = x; my = y;
+    if (pmx > -9998) {
+      dragVX = mx - pmx;
+      dragVY = my - pmy;
+    }
+  }
+
+  cvs.addEventListener('pointerdown', e => {
+    down = true; downT = performance.now();
+    downX = e.clientX; downY = e.clientY;
+    cvs.setPointerCapture(e.pointerId);
+    setP(e.clientX, e.clientY);
+    pmx = mx; pmy = my;
+    dragVX = dragVY = 0;
+  });
+  cvs.addEventListener('pointermove', e => {
+    setP(e.clientX, e.clientY);
+    if (down) {
+      const n = 6;
+      for (let k = 0; k < n; k++) {
+        const t = k / n;
+        spawn(
+          mx + (Math.random() - 0.5) * 10,
+          my + (Math.random() - 0.5) * 10,
+          dragVX * (0.3 + Math.random() * 0.5),
+          dragVY * (0.3 + Math.random() * 0.5),
+          185 + Math.random() * 55,
+          1.2 + Math.random() * 1.8,
+          700 + Math.random() * 900
+        );
+      }
+    }
+  });
+  cvs.addEventListener('pointerup', e => {
+    const dt = performance.now() - downT;
+    const dx = e.clientX - downX, dy = e.clientY - downY;
+    const dist = Math.hypot(dx, dy);
+    if (dt < 260 && dist < 12) {
+      // tap => burst
+      const n = 220;
+      for (let k = 0; k < n; k++) {
+        const a = Math.random() * Math.PI * 2;
+        const sp = 2 + Math.random() * 7;
+        spawn(
+          e.clientX, e.clientY,
+          Math.cos(a) * sp, Math.sin(a) * sp,
+          175 + Math.random() * 90,
+          1 + Math.random() * 2.6,
+          800 + Math.random() * 1100
+        );
+      }
+    }
+    down = false;
+  });
+  cvs.addEventListener('pointercancel', () => { down = false; });
+
+  // ---- ambient drift from idle particles ----
+  function ambient(dt) {
+    if (alive < 120) {
+      const n = 1;
+      for (let k = 0; k < n; k++) {
+        spawn(
+          Math.random() * W,
+          Math.random() * H,
+          (Math.random() - 0.5) * 0.3,
+          (Math.random() - 0.5) * 0.3,
+          200 + Math.random() * 60,
+          0.8 + Math.random() * 1.2,
+          4000 + Math.random() * 3000
+        );
+      }
+    }
+  }
+
+  // ---- physics constants ----
+  const DRAG = 0.985;
+  const GRAV = 0.015;
+
+  function step(dt) {
+    const dragPow = Math.pow(DRAG, dt / 16.67);
+    const grav = GRAV * (dt / 16.67);
+    for (let i = 0; i < MAX; i++) {
+      if (life[i] <= 0) continue;
+      vx[i] *= dragPow;
+      vy[i] = vy[i] * dragPow + grav;
+      px[i] += vx[i] * (dt / 16.67);
+      py[i] += vy[i] * (dt / 16.67);
+      life[i] -= dt;
+      if (py[i] > H + 40 || px[i] < -40 || px[i] > W + 40) {
+        life[i] = 0;
+      }
+    }
+  }
+
+  function render() {
+    // trail fade
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(5,6,10,0.22)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.globalCompositeOperation = 'lighter';
+    let c = 0;
+    for (let i = 0; i < MAX; i++) {
+      if (life[i] <= 0) continue;
+      const t = life[i] / maxLife[i];
+      const alpha = t * t;
+      const s = size[i] * (0.4 + t * 0.9);
+      ctx.beginPath();
+      ctx.fillStyle = 'hsla(' + hue[i] + ',100%,' + (55 + t * 20) + '%,' + alpha + ')';
+      ctx.arc(px[i], py[i], s, 0, 6.2832);
+      ctx.fill();
+      c++;
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    // glow layer for large particles handled by additive already
+    cnt.textContent = c;
+  }
+
+  let last = performance.now();
+  function loop(now) {
+    let dt = now - last;
+    last = now;
+    if (dt > 48) dt = 48;
+
+    ambient(dt);
+    step(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // ---- double-tap to clear ----
+  let lastTap = 0;
+  cvs.addEventListener('pointerup', e => {
+    const now = performance.now();
+    if (now - lastTap < 280) {
+      for (let i = 0; i < MAX; i++) life[i] = 0;
+    }
+    lastTap = now;
+  });
+})();
+</script>
+</body>
+</html>
